@@ -1,6 +1,6 @@
 #from random import randint
 import problem_space_server
-
+from numpy import random
 class create_agent(object):
     
                       
@@ -41,6 +41,26 @@ class create_agent(object):
         if self.agent_space_parameters == "NK":
             best_maximum_score = max([c for a,b,c in neighbor_ids_solutions_scores])
             best_maximum_solution = [b for a,b,c in neighbor_ids_solutions_scores if c==best_maximum_score][0]
+            self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)     
+            if best_maximum_score > self.agent_score:
+                self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)
+            else:
+                self.agent_should_explore = True 
+        if self.agent_space_parameters == "TSP":
+            best_minimum_score = min([c for a,b,c in neighbor_ids_solutions_scores])
+            best_minimum_solution = [b for a,b,c in neighbor_ids_solutions_scores if c==best_minimum_score][0]
+            self.hold_new_solution_and_score_until_next_round(best_minimum_solution,best_minimum_score)     
+            if best_minimum_score < self.agent_score:
+                self.hold_new_solution_and_score_until_next_round(best_minimum_solution,best_minimum_score)
+            else:
+                self.agent_should_explore = True     
+
+    def compare_with_neighbors_with_error(self,neighbor_ids_solutions_scores,probability):
+        if self.agent_space_parameters == "NK":
+            best_maximum_score = max([c for a,b,c in neighbor_ids_solutions_scores])
+            best_maximum_solution = [b for a,b,c in neighbor_ids_solutions_scores if c==best_maximum_score][0]
+            flip_list = list(best_maximum_solution)
+            flip_list = [str((int(x)+1)%2) if(1-probability)<random.random() else x for x in flip_list]
             self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)     
             if best_maximum_score > self.agent_score:
                 self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)

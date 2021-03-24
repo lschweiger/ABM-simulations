@@ -1,6 +1,6 @@
 #from random import randint
 import problem_space_server
-from numpy import random
+from random import random
 class create_agent(object):
     
                       
@@ -41,7 +41,7 @@ class create_agent(object):
         if self.agent_space_parameters == "NK":
             best_maximum_score = max([c for a,b,c in neighbor_ids_solutions_scores])
             best_maximum_solution = [b for a,b,c in neighbor_ids_solutions_scores if c==best_maximum_score][0]
-            self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)     
+            #self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)     
             if best_maximum_score > self.agent_score:
                 self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)
             else:
@@ -55,15 +55,26 @@ class create_agent(object):
             else:
                 self.agent_should_explore = True     
 
-    def compare_with_neighbors_with_error(self,neighbor_ids_solutions_scores,probability):
+    def compare_with_neighbors_with_error(self,neighbor_ids_solutions_scores,probability,problem_space):
         if self.agent_space_parameters == "NK":
             best_maximum_score = max([c for a,b,c in neighbor_ids_solutions_scores])
             best_maximum_solution = [b for a,b,c in neighbor_ids_solutions_scores if c==best_maximum_score][0]
-            flip_list = list(best_maximum_solution)
-            flip_list = [str((int(x)+1)%2) if(1-probability)<random.random() else x for x in flip_list]
-            self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)     
-            if best_maximum_score > self.agent_score:
-                self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)
+            flip_list = list(bin(best_maximum_solution)[2:].zfill(self.N))
+            #print(flip_list," old")
+            flip_list = [str((int(x)+1)%2) if(1-probability)<random() else x for x in flip_list]
+            #print(flip_list," new")
+            new_error_solution="".join(flip_list)
+            #print(str_flip)
+            try:
+                new_error_int=int(new_error_solution,2)
+            except:
+                print(new_error_solution)
+            #print(int_flip)
+            new_error_score=problem_space[new_error_int]
+            #print(new_error_score)
+            #self.hold_new_solution_and_score_until_next_round(best_maximum_solution,best_maximum_score)     
+            if new_error_score > self.agent_score:
+                self.hold_new_solution_and_score_until_next_round(new_error_int,new_error_score)
             else:
                 self.agent_should_explore = True 
         if self.agent_space_parameters == "TSP":

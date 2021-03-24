@@ -16,6 +16,8 @@ class create_network(object):
             return [[j for j in range(self.population) if j!=i] for i in range(self.population)]
         if self.type_of_network == "torus": 
             return [[(i-2)%self.population,(i-1)%self.population,(i+1)%self.population,(i+2)%self.population] for i in range(self.population)]
+        if self.type_of_network == "torus_w_error": 
+            return [[(i-2)%self.population,(i-1)%self.population,(i+1)%self.population,(i+2)%self.population] for i in range(self.population)]
         if self.type_of_network == "single fully connected agent on torus":
             # single_agent (one agent between 0 and 99 inclusive) is the agent who is fully connected to everyone else, but everyone else is not connected to single_agent. 
             single_agent_torus = [[(i-2)%self.population,(i-1)%self.population,(i+1)%self.population,(i+2)%self.population] for i in range(self.population)]

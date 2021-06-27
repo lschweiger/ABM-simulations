@@ -11,8 +11,8 @@ class create_agent(object):
          self.agent_should_explore = False
          self.temporarily_hold_agent_solution = 999999
          self.temporarily_hold_agent_score = 99999
-
-        
+         self.avgscore=0.0
+         
     def store_new_solution_and_score(self,new_agent_solution,new_agent_score):
         self.agent_solution = new_agent_solution         
         self.agent_score = new_agent_score

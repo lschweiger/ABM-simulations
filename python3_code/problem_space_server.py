@@ -7,8 +7,7 @@ from numpy import loadtxt
 
 class create_problem_space(object):
     
-    def __init__(self,problem_space,simulation_number):
-        self.problem_space = problem_space
+    def __init__(self,simulation_number):
         self.simulation_number = simulation_number
        
     def return_NK_problem_space(self):

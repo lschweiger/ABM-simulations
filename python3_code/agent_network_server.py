@@ -26,13 +26,15 @@ class create_network(object):
         if self.type_of_network == "single fast communicator agent on torus":
             return [[(i-2)%self.population,(i-1)%self.population,(i+1)%self.population,(i+2)%self.population] for i in range(self.population)]
         if self.type_of_network == "evolving network":
-            evolving_network= [random.sample(list(range(0,i))+list(range(i+1,self.population)),i+1) for i in range(0,self.population-1)]
-            evolving_network[0]=[int(round(random.random()*(self.population-1)))+1]
-            while evolving_network[0]==[100]:
-                evolving_network[0]=[int(round(random.random()*(self.population-1)))+1]
+            shuffled_range = random.sample(range(0,self.population),self.population)
+            evolving_network = [random.sample(list(range(0,i))+list(range(i+1,self.population)),i+1) for i in range(0,self.population-1)]
+            evolving_network[0] = [int(round(random.random()*(self.population-1)))+1]
+            while evolving_network[0] == [100]:
+                evolving_network[0] = [int(round(random.random()*(self.population-1)))+1]
             temp=list(range(self.population-1))
             random.shuffle(temp)
             evolving_network.append(temp)
+            random.shuffle(evolving_network)
             # for agent_i in range(self.population):
             #     for link in range(len(evolving_network[agent_i])):
             #         # Check to see if there are any duplicate links

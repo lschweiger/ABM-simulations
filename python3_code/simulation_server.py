@@ -88,7 +88,10 @@ def explore_space(agent_id,agent_solution,agent_score):
         try:
             test_agent_solution = int(test_agent_solution_binary,2) # converts back to number        
         except:
-            print(test_agent_solution_binary)
+            adding1=int(round(random()*(len(test_agent_solution_binary)-1)))%2
+            adding2=int(round(random()*(len(test_agent_solution_binary)-1)))%2
+            final_add=str(adding1)+str(adding2)
+            test_agent_solution=int(test_agent_solution_binary[:-2]+final_add,2)
         test_agent_score = problemspace[test_agent_solution] # finds score using int version of string
         if test_agent_score > agent_score:
             agents[agent_id].hold_new_solution_and_score_until_next_round(test_agent_solution, test_agent_score)
@@ -151,8 +154,8 @@ def calculate_one_round_statistics(rounds):
 if(probability>0):
         info_velocity=1
 else:
-    info_velocity = args.IV #ex - 1 (every turn), 2 (every two turns, communicatioon allowed), 5 (every fifth turn, communication allowed), or 10
-# Reduce communication to every tenth round if "single fast communiator agent on torus"
+    info_velocity = args.IV #ex - 1 (every turn), 2 (every two turns, communication allowed), 5 (every fifth turn, communication allowed), or 10
+# Reduce communication to every tenth round if "single fast communicator agent on torus"
 #if type_of_network == 'single fast communicator agent on torus':
 #    info_velocity = 10
 if(info_velocity==1 or info_velocity==2):
@@ -175,7 +178,7 @@ for simulations in range(total_simulations):   #setups network and agents
         problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_NK_problem_space() #loads NK space file
     if type_of_problem_space == "TSP":
         problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_TSP_problem_space()
-    network = net.create_network(type_of_network,single_agent).return_network() #creates network with propities
+    network = net.create_network(type_of_network,single_agent).return_network() #creates network with proprieties
     agents = [a.create_agent(i,type_of_problem_space,N) for i in range(population)]  #creates agents
 
     # Step 2 - Give each agent their initial solution and initial score

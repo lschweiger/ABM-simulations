@@ -3,29 +3,32 @@ import os
 import problem_space_server as ps
 import agent_server as a
 import agent_network_server as net
-from random import randint
+#from random import randint
 from numpy import average
 import sys 
 from random import shuffle
-from random import uniform 
 from numpy import mean, std 
 from numpy import array
-from scipy.stats import mode
+#from scipy.stats import mode
 from random import random
-from random import uniform 
+from collections import Counter
 import pandas as pd
 import argparse
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import as_completed
+
+
 N = 20
 population = 100 #Number of Agents
 number_of_rounds = 300
 r = 8 #NK Space 
 
-parser = argparse.ArgumentParser(description='Paramters for simulation')
+parser = argparse.ArgumentParser(description='Parameters for simulation')
 parser.add_argument('--TPS', type = str,
                     help = 'type of problem_space NK or TSP',required = True)
 parser.add_argument('--Total',type = int,help = 'Total number of spaces to run',required = True)
 parser.add_argument('--TN',type = str,required = True,
-                    help = "Type of network:  'evolving network', 'evolving communication speed', or 'evolving error '")
+                    help = "Type of network:  'evolving network', 'evolving communication speed', or 'evolving error ','error'")
 args=parser.parse_args()
 
 type_of_problem_space=args.TPS
@@ -37,7 +40,7 @@ if type_of_simulation == "evolving network":
 if type_of_simulation == "evolving communication speed":
     type_of_network = "torus"
     communication_speeds = [i+1 for i in range(10)]*10
-if(type_of_simulation=="evolving error"):
+if(type_of_simulation=="evolving error" or type_of_simulation=="error"):
     type_of_network = "torus"
 final_statistics = []
 simulation_statistics = []
@@ -58,25 +61,33 @@ def return_TSP_score(agent_solution,problemspace):
     for j in range(20):
         tsp_score = tsp_score + problemspace[agent_solution[j]][agent_solution[(j+1)%20]]
     return tsp_score
-        
+       
 # Helper Functions
-def explore_space(agent_id,agent_solution,agent_score):
+def explore_space(agent_id,agent_solution,agent_score,agent_scoresum,network,problemspace,agents):
     if type_of_problem_space == "NK":
         test_agent_solution = agent_solution        
-        agent_solution_binary = bin(test_agent_solution)[2:].zfill(N) #converts to binary for bit manipulation padded to length N
+        #agent_solution_binary = bin(test_agent_solution)[2:].zfill(N) #converts to binary for bit manipulation padded to length N
+        agent_solution_binary = f'{test_agent_solution:020b}' #converts to binary for bit manipulation padded to length N
         test_agent_solution_binary = list(agent_solution_binary) #converts to list to be manipulated         
         random_bit = int(round(random()*(len(test_agent_solution_binary)-1))) #bit manipulation, picks random number in binary sequence
-        #changed_bit = str((int(agent_solution_binary[random_bit])+1)%2) #bit man
-        #s = list(test_agent_solution_binary) #turn string into a list 
-        #if(test_agent_solution_binary[random_bit]=='0'): #flips selected bit
-        #    test_agent_solution_binary[random_bit]='1'
-        #else:
-        #    test_agent_solution_binary[random_bit]='0'
-        #s[random_bit] = changed_bit
         try:
-            test_agent_solution_binary[random_bit]=str(int((int(test_agent_solution_binary[random_bit])+1)%2))
+            changed_bit = str((int(agent_solution_binary[random_bit])+1)%2) #bit man
         except:
-            print(test_agent_solution_binary[random_bit]," ",test_agent_solution_binary)
+            print(agent_id)
+            print(agent_solution_binary)
+            print(random_bit)
+            print(test_agent_solution)
+            return
+        s = list(test_agent_solution_binary) #turn string into a list 
+        # if(test_agent_solution_binary[random_bit]=='0'): #flips selected bit
+        #     test_agent_solution_binary[random_bit]='1'
+        # else:
+        #     test_agent_solution_binary[random_bit]='0'
+        s[random_bit] = changed_bit
+        try:
+           test_agent_solution_binary[random_bit]=str(int((int(test_agent_solution_binary[random_bit])+1)%2))
+        except:
+           print(test_agent_solution_binary[random_bit]," ",test_agent_solution_binary)
         test_agent_solution_binary = "".join(test_agent_solution_binary) #convert back to string
         
         try:
@@ -107,22 +118,22 @@ def explore_space(agent_id,agent_solution,agent_score):
             agents[agent_id].hold_new_solution_and_score_until_next_round(agent_solution, agent_score)
         
 # Helper function - Each round, compare neighbors and then go to problem space
-def one_round(current_round):
+def one_round(current_round,agents,network,problemspace): # exploit function
     for i in range(population):
         neighbors = [agents[negh].current_agent_values() for negh in network[i]]
         if current_round%communication_speeds[i]==0 or current_round==0:         
             agents[i].compare_with_neighbors(neighbors)
             if agents[i].should_agent_explore():
-                explore_space(*agents[i].current_agent_values())    
+                explore_space(*agents[i].current_agent_values(),network,problemspace,agents)    
         else:
-            explore_space(*agents[i].current_agent_values())    
+            explore_space(*agents[i].current_agent_values(),network,problemspace,agents)    
     for i in range(population):
         agents[i].adopt_solutions_for_next_round()
     
-    agent_rank_values_one_simulation = rank_and_sort_agent_values()
-    agent_rank.append(agent_rank_values_one_simulation)
+    #agent_rank_values_one_simulation = rank_and_sort_agent_values()
+    #agent_rank.append(agent_rank_values_one_simulation)
 
-def one_round_com(current_round, agents,com_speed):
+def one_round_com(current_round, agents,com_speed,network):
     for i in range(len(com_speed)):
         if((current_round+1)%com_speed[i]==0):
             neighbors = [agents[negh].current_agent_values() for negh in network[i]]
@@ -132,7 +143,7 @@ def one_round_com(current_round, agents,com_speed):
                 if agents[i].should_agent_explore():
                     explore_space(*agents[i].current_agent_values())    
             else:
-                explore_space(*agents[i].current_agent_values())    
+                explore_space(*agents[i].current_agent_values(),network)    
     for i in range(population):
         agents[i].adopt_solutions_for_next_round()
 
@@ -141,12 +152,13 @@ def one_round_error(current_round, agents,error_rate,problem_space):
             neighbors = [agents[negh].current_agent_values() for negh in network[i]]       
             agents[i].compare_with_neighbors_with_error(neighbors,error_rate[i],problem_space)
             if agents[i].should_agent_explore():
-                explore_space(*agents[i].current_agent_values())  
+                explore_space(*agents[i].current_agent_values(),network)  
     for i in range(population):
         agents[i].adopt_solutions_for_next_round()
     
-    agent_rank_values_one_simulation = rank_and_sort_agent_values()
-    agent_rank.append(agent_rank_values_one_simulation)
+    #agent_rank_values_one_simulation = rank_and_sort_agent_values()
+    #agent_rank.append(agent_rank_values_one_simulation)
+
 # Helper function
 def rank_and_sort_agent_values():
    t1 = [agents[i].current_agent_values()[2] for i in range(population)]
@@ -155,7 +167,7 @@ def rank_and_sort_agent_values():
    return t3     
     
 # Helper function 
-def calculate_one_round_statistics(rounds):
+def calculate_one_round_statistics(rounds,agents):
     if type_of_problem_space == "NK":
         values = [rounds, average([agents[i].current_agent_values()[2] for i in range(population)]), len(set([agents[i].current_agent_values()[1] for i in range(population)]))]
     if type_of_problem_space == "TSP":
@@ -163,15 +175,16 @@ def calculate_one_round_statistics(rounds):
     round_statistics.append(values)
                     
 # Helper function
-def calculate_final_statistics():
+def calculate_final_statistics(agents):
     final_statistics = []
     for j in range(0, len(round_statistics), number_of_rounds):
         final_statistics.append(round_statistics[j:j+number_of_rounds])
-    score = [[y for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
-    final_score = [sum(x)/len(x) for x in zip(*score)]
-    unique_solution = [[z for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
-    final_unique_solution = [sum(x)/len(x) for x in zip(*unique_solution)]
-    final_round = [[x for x,y,z in final_statistics[i]] for i in range(len(final_statistics))][0]
+    #score = [[y for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
+    final_score = [x.current_agent_values()[2] for x in agents]
+    #final_score = [sum(x)/len(x) for x in zip(*score)]
+    #unique_solution = [[z for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
+    #final_unique_solution = [sum(x)/len(x) for x in zip(*unique_solution)]
+    #final_round = [[x for x,y,z in final_statistics[i]] for i in range(len(final_statistics))][0]
     if type_of_problem_space == "NK":
         print([[final_round[i],final_score[i]**r,final_unique_solution[i]] for i in range(len(final_round))])   
     if type_of_problem_space == "TSP":
@@ -179,15 +192,18 @@ def calculate_final_statistics():
 
 
 #Helper function
-def new_network_connection_from_roulette_wheel_sample(agents,network): # rewrite connection
+def new_network_connection_from_roulette_wheel_sample(agents,network,round_counter): # rewrite connection
+    # score_sum = 0
+    # values = []
+    # for i in range(population):
+    #     score_sum += agents[i].current_agent_values()[2] 
+    #     values.append(agents[i].current_agent_values()[2])
     score_sum = 0
-    fitness = []
-    values = []    
-    for i in range(population):
-        score_sum += agents[i].current_agent_values()[2] 
-        values.append(agents[i].current_agent_values()[2])    
-    max_values = max(values)
-    min_values = min(values)
+    [score_sum := score_sum + i.current_agent_values()[2] for i in agents] # getting and summing over all previous sum of scores for each agent
+    #score_sum = score_sum/round_counter
+    # values = [x.current_agent_values()[2] for x in agents]
+    # max_values = max(values)
+    # min_values = min(values)
     rel_fit=[agents[i].current_agent_values()[2]/score_sum for i in range(population)]
     probs = [sum(rel_fit[:i+1]) for i in range(len(rel_fit))] 
     new_network =[]
@@ -254,17 +270,29 @@ def calculate_one_round_statistics_for_communication(rounds):
     round_statistics.append(values)
 
 # Helper function
-def calculate_final_statistics_of_one_generation():
-    final_statistics = []
-    for j in range(0, len(round_statistics), number_of_rounds):
-        final_statistics.append(round_statistics[j:j+number_of_rounds])
-    score = [[y for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
-    final_score = [sum(x)/len(x) for x in zip(*score)]
-    unique_solution = [[z for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
-    final_unique_solution = [sum(x)/len(x) for x in zip(*unique_solution)]
-    final_round = [[x for x,y,z in final_statistics[i]] for i in range(len(final_statistics))][0]
+def calculate_final_statistics_of_one_generation(agents):
+    #final_statistics = []
+    #for j in range(0, len(round_statistics), number_of_rounds):
+    #    final_statistics.append(round_statistics[j:j+number_of_rounds])
+    #score = [[y for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
+    final_score = [x.current_agent_values()[2] for x in agents]
+    #final_score = [sum(x)/len(x) for x in zip(*score)]
+    #print(final_score)
+    #print(Counter(final_score).most_common(1)[0][0])
+    #unique_solution = [[z for x,y,z in final_statistics[i]] for i in range(len(final_statistics))]
+    #final_unique_solution = [sum(x)/len(x) for x in zip(*unique_solution)]
+    #final_round = [[x for x,y,z in final_statistics[i]] for i in range(len(final_statistics))][0]
     if type_of_problem_space == "NK":
-        return final_score[-1]
+        final_scores = 0.0 
+        scores = Counter(final_score).most_common()
+        [final_scores := final_scores + i[0]*i[1] for i in scores]
+        #print(final_scores/len(final_score))
+        return final_scores/len(final_score)
+        #return final_score[-1]
+        #return Counter(final_score).most_common(1)[0][0]
+        #return mean(Counter(final_score).most_common()[0][0])
+        #return max(final_score)
+        #return mean(final_score)
     if type_of_problem_space == "TSP":
         return final_score[-1] 
 
@@ -281,6 +309,77 @@ def calculate_final_statistics_of_one_generation_com(number_of_rounds):
         return final_score[-1]
     if type_of_problem_space == "TSP":
         return final_score[-1] 
+
+
+def evolving_networks_fn(simulation_id):
+        simulation_rounds = 0 
+        frequency_of_mode_ = 0
+        if type_of_problem_space == "NK":
+            problemspace = ps.create_problem_space(simulation_id).return_NK_problem_space()
+        # if type_of_problem_space == "TSP":
+        #     problemspace = ps.create_problem_space(simulation_id).return_TSP_problem_space()
+        #print(frequency_of_mode_,"pop")
+        # Step 1 - Create the Problem Space, the network, and the agents.         
+        network = net.create_network(type_of_network,single_agent).return_network() #Create the network for the first round
+                
+        # Step 2 - Give each agent their initial solution and initial score
+
+        agents = [a.create_agent(agent_id,type_of_problem_space,N) for agent_id in range(population)]
+        #
+        if type_of_problem_space == "NK":
+                for i in range(population):
+                    solution_number = int(round(random()*(2**N)-1))
+                    agents[i].store_new_solution_and_score(solution_number,problemspace[solution_number])
+        while frequency_of_mode_ < population:    
+        
+            # Step 3 - Each simulation/round, compare neighbors and then go to problem space
+            #calculate_one_round_statistics(simulation_rounds,agents)#loop until 1 unique solutions
+            #unique_solution = [x.current_agent_values()[1] for x in agents]
+            #unique_solution = len(set([x.current_agent_values()[1] for x in agents]))
+            #one_round(simulation_rounds,agents,network,problemspace)
+            #print(set([x.current_agent_values()[1] for x in agents]))
+            round_counter = 0
+            #print("preloop ", frequency_of_mode_)
+            unique_solution = len(set([x.current_agent_values()[1] for x in agents]))
+            
+            #unique_sol_counter = 0
+            while unique_solution>1 and round_counter<=70:
+                one_round(simulation_rounds,agents,network,problemspace)
+                #pre_unique_sol = unique_solution
+                unique_solution = len(set([x.current_agent_values()[1] for x in agents]))
+                #if(unique_solution==pre_unique_sol):
+                #    unique_sol_counter += 1
+                round_counter = round_counter + 1
+           
+            # try:
+            #     one_round(simulation_rounds)
+            # except:
+            #     print(network)
+            #     print("old round", simulation_rounds)
+            #     #break
+            #print("post loop ", frequency_of_mode_)
+            
+            network = new_network_connection_from_roulette_wheel_sample(agents,network,round_counter=0)
+            #print([len(network[i]) for i in range(population)])
+            #min_ = min([len(network[i]) for i in range(population)])
+            #mean_ = mean([len(network[i]) for i in range(population)])
+            #max_ = max([len(network[i]) for i in range(population)])
+            #mode_ = mode([len(network[i]) for i in range(population)])
+            #mode_ = int(mode_[0])
+            mode_ = Counter([len(network[i]) for i in range(population)]).most_common(1)[0][0]
+            #frequency_of_mode_ = [len(network[i]) for i in range(population)].count(mode_)
+            frequency_of_mode_ = Counter([len(network[i]) for i in range(population)]).most_common(1)[0][1]
+            #print([len(network[i]) for i in range(population)])
+            #print(simulations, simulation_rounds, min_, mean_, max_, mode_, frequency_of_mode_)
+
+            simulation_rounds = simulation_rounds + 1
+            #round_statistics=[]
+        # third if statement for evolving error 
+        # LAUNY NOTE: You'll likely need to update the code so that you can output this as a DataFrame
+        # And save as a CSV in one fell swoop. 
+        #collection.append([simulations, simulation_rounds, mode_, calculate_final_statistics_of_one_generation(agents)])
+        return [simulation_id, simulation_rounds, mode_, calculate_final_statistics_of_one_generation(agents)]
+
  
 # needs to finished and update, to include com speeds, roulette wheel,
 if type_of_simulation == "evolving communication speed":
@@ -298,9 +397,9 @@ if type_of_simulation == "evolving communication speed":
         collection_mode=[]  
         # Step 1 - Create the Problem Space, the network, and the agents. 
         if type_of_problem_space == "NK":
-            problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_NK_problem_space()
+            problemspace = ps.create_problem_space(simulations).return_NK_problem_space()
         if type_of_problem_space == "TSP":
-            problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_TSP_problem_space()
+            problemspace = ps.create_problem_space(simulations).return_TSP_problem_space()
         network = net.create_network(type_of_network,single_agent).return_network() #Create the network for the first round
         agents = [a.create_agent(i,type_of_problem_space,N) for i in range(population)]    
 
@@ -344,57 +443,17 @@ if type_of_simulation == "evolving communication speed":
 
 if type_of_simulation == "evolving network":
     collection=[]
-    for simulations in range(total_simulations):
-        simulation_rounds = 0 
-        frequency_of_mode_ = 0
-        if type_of_problem_space == "NK":
-            problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_NK_problem_space()
-        if type_of_problem_space == "TSP":
-            problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_TSP_problem_space()
-
-        while frequency_of_mode_ < population:    
-            
-            # Step 1 - Create the Problem Space, the network, and the agents. 
-            
-            if simulation_rounds == 0:
-                network = net.create_network(type_of_network,single_agent).return_network() #Create the network for the first round
-            agents = [a.create_agent(i,type_of_problem_space,N) for i in range(population)]  
-            # Step 2 - Give each agent their initial solution and initial score
-            if type_of_problem_space == "NK":
-                for i in range(population):
-                    solution_number = int(round(random()*(2**N)-1))
-                    agents[i].store_new_solution_and_score(solution_number,problemspace[solution_number])   
-            if type_of_problem_space == "TSP":
-                for i in range(population):
-                    solution_number = [k for k in range(N)]
-                    shuffle(solution_number)
-                    agents[i].store_new_solution_and_score(solution_number,return_TSP_score(solution_number, problemspace))
-        
-            # Step 3 - Each simulation/round, compare neighbors and then go to problem space
-            calculate_one_round_statistics(simulation_rounds)
-            try:
-                one_round(simulation_rounds)
-            except:
-                print(network)
-                print("old round", simulation_rounds)
-                break
-            network = new_network_connection_from_roulette_wheel_sample(agents,network)
-            min_ = min([len(network[i]) for i in range(population)])
-            mean_ = mean([len(network[i]) for i in range(population)])
-            max_ = max([len(network[i]) for i in range(population)])
-            mode_ = mode([len(network[i]) for i in range(population)])
-            mode_ = int(mode_[0])
-            frequency_of_mode_ = [len(network[i]) for i in range(population)].count(mode_)
-            #print(simulations, simulation_rounds, min_, mean_, max_, mode_, frequency_of_mode_)
-
-            simulation_rounds = simulation_rounds + 1
-            #round_statistics=[]
-# third if statment for evoling error 
-
-        # LAUNY NOTE: You'll likely need to update the code so that you can output this as a DataFrame
-        # And save as a CSV in one fell swoop. 
-        collection.append([simulations, simulation_rounds, mode_, calculate_final_statistics_of_one_generation()])
+    with ProcessPoolExecutor(max_workers=20) as executor:
+        futures = {executor.submit(evolving_networks_fn,threaditer) for threaditer in range(total_simulations)}
+        for future in as_completed(futures):
+            #print(future.result())
+            collection.append(future.result())
+    
+    #print(collection)
+    #for simulations in range(total_simulations):
     en_output=pd.DataFrame(data=collection,columns=["simulation #","simulation_rounds ","mode_","final score"])
+    #print(en_output)
+    #en_output.sort_values(by=["simulation #"])
     en_output.to_csv(type_of_network+".csv",index=False)
 
 if type_of_simulation == "evolving error":
@@ -403,16 +462,17 @@ if type_of_simulation == "evolving error":
     collection=[]
 
     for simulations in range(total_simulations): 
-        error_rate =  [round(10-i/10,4) for i in range(100)]
+        error_rate =  [float(i) for x in range(20) for i in [0, 0.01, 0.1, 0.5, 1.0 ]]
+        shuffle(error_rate)
         one_simulation_speeds = [] 
         collection_min=[]
         collection_max=[]
         collection_mode=[]  
         # Step 1 - Create the Problem Space, the network, and the agents. 
         if type_of_problem_space == "NK":
-            problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_NK_problem_space()
+            problemspace = ps.create_problem_space(simulations).return_NK_problem_space()
         if type_of_problem_space == "TSP":
-            problemspace = ps.create_problem_space(type_of_problem_space,simulations).return_TSP_problem_space()
+            problemspace = ps.create_problem_space(simulations).return_TSP_problem_space()
         network = net.create_network(type_of_network,single_agent).return_network() #Create the network for the first round
         agents = [a.create_agent(i,type_of_problem_space,N) for i in range(population)]    
 
@@ -440,6 +500,61 @@ if type_of_simulation == "evolving error":
             collection_max.append(max(error_rate))
             mode_com = mode(error_rate)
             collection_mode.append(int(mode_com[0]))
+
+        score.append(calculate_final_statistics_of_one_generation_com(gen))
+        round_statistics=[]
+        #agent_rank = []
+        #print simulations, average(error_rate), rounds, len(set([agents[i].current_agent_values()[2] for i in range(population)]))
+        #calculate_final_statistics_of_one_generation()
+        total_simulation_speeds.append(one_simulation_speeds)
+
+        collection.append([simulations,gen,total_simulation_speeds[simulations],mean(total_simulation_speeds[simulations]),collection_min,collection_max,collection_mode,total_simulation_speeds[simulations][-1],score[simulations]])
+    en_output=pd.DataFrame(data=collection,columns=["simulation #","# of generations","simulation com speed value ","error rate mean","min","max","mode","error rate final value","final score"])
+    en_output.to_csv(type_of_simulation+"_"+type_of_network+".csv",index=False)
+
+if type_of_simulation == "error":
+    total_simulation_speeds = []
+    score=[]
+    collection=[]
+
+    for simulations in range(total_simulations): 
+        error_rate =  [float(i) for x in range(50) for i in [0,.01]]
+        one_simulation_speeds = [] 
+        collection_min=[]
+        collection_max=[]
+        collection_mode=[]  
+        # Step 1 - Create the Problem Space, the network, and the agents. 
+        if type_of_problem_space == "NK":
+            problemspace = ps.create_problem_space(simulations).return_NK_problem_space()
+        if type_of_problem_space == "TSP":
+            problemspace = ps.create_problem_space(simulations).return_TSP_problem_space()
+        network = net.create_network(type_of_network,single_agent).return_network() #Create the network for the first round
+        agents = [a.create_agent(i,type_of_problem_space,N) for i in range(population)]    
+
+        # Step 2 - Give each agent their initial solution and initial score
+        if type_of_problem_space == "NK":
+            for i in range(population):
+                solution_number = int(round(random()*(2**N)-1))
+                agents[i].store_new_solution_and_score(solution_number,problemspace[solution_number])   
+        if type_of_problem_space == "TSP":
+            for i in range(population):
+                solution_number = [k for k in range(N)]
+                shuffle(solution_number)
+                agents[i].store_new_solution_and_score(solution_number,return_TSP_score(solution_number, problemspace))        
+        
+        # Step 3 - Each round, compare neighbors and then go to problem space
+        gen = 0
+        #while(len(set(error_rate))!=1):
+        one_round_error(gen,agents,error_rate,problemspace)
+        gen+=1
+        # Step 4 - Calculate the new communication speeds 
+            #error_rate = create_new_error_rates(agents,error_rate)
+        one_simulation_speeds.append(average(error_rate))
+        calculate_one_round_statistics_for_communication(gen)
+        collection_min.append(min(error_rate))
+        collection_max.append(max(error_rate))
+        mode_com = mode(error_rate)
+        collection_mode.append(int(mode_com[0]))
 
         score.append(calculate_final_statistics_of_one_generation_com(gen))
         round_statistics=[]
